@@ -154,7 +154,7 @@
                                             data-cart-stock="{{ $stock }}"
                                             data-cart-image="{{ $cardImageUrl }}"
                                             data-cart-url="{{ $buyUrl }}"
-                                        >+</button>
+                                        >🛒</button>
                                         <a class="icon-btn" href="{{ $buyUrl }}" aria-label="购买 {{ $goods['gd_name'] }}">→</a>
                                     </div>
                                 </div>
