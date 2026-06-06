@@ -13,6 +13,17 @@ class GoodsSku extends BaseModel
 
     protected $table = 'goods_skus';
 
+    protected $fillable = [
+        'goods_id',
+        'sku_name',
+        'sku_code',
+        'actual_price',
+        'picture',
+        'in_stock',
+        'ord',
+        'is_open',
+    ];
+
     protected static function boot()
     {
         parent::boot();
