@@ -10,6 +10,7 @@ use App\Service\GoodsSkuService;
 use App\Service\OrderProcessService;
 use App\Service\OrderService;
 use App\Service\PayService;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Jenssegers\Agent\Agent;
 
@@ -59,6 +60,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-
+        if (strpos((string) config('app.url'), 'https://') === 0) {
+            URL::forceScheme('https');
+        }
     }
 }
