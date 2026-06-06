@@ -13,11 +13,15 @@ class GoodsSkuService
     public function ensureDefaultSku(Goods $goods): GoodsSku
     {
         $sku = GoodsSku::query()
+            ->withTrashed()
             ->where('goods_id', $goods->id)
             ->where('sku_code', GoodsSku::DEFAULT_SKU_CODE)
             ->first();
 
         if ($sku) {
+            if ($sku->trashed()) {
+                $sku->restore();
+            }
             $this->fillMissingFromGoods($sku, $goods);
             return $sku;
         }
@@ -47,14 +51,6 @@ class GoodsSkuService
         if ($skus->isEmpty()) {
             $skus = collect([$this->ensureDefaultSku($goods)]);
         }
-
-        $this->ensureOneDefaultCode($goods, $skus);
-
-        $skus = GoodsSku::query()
-            ->where('goods_id', $goods->id)
-            ->orderBy('ord', 'DESC')
-            ->orderBy('id')
-            ->get();
 
         foreach ($skus as $sku) {
             $this->fillMissingFromGoods($sku, $goods);
@@ -88,6 +84,9 @@ class GoodsSkuService
             }
         } else {
             $sku = (clone $query)->where('sku_code', GoodsSku::DEFAULT_SKU_CODE)->first();
+            if (!$sku) {
+                $sku = (clone $query)->orderBy('ord', 'DESC')->orderBy('id')->first();
+            }
         }
 
         if (!$sku) {
@@ -125,25 +124,6 @@ class GoodsSkuService
                 return [$sku->id => $sku->display_name];
             })
             ->toArray();
-    }
-
-    private function ensureOneDefaultCode(Goods $goods, $skus): void
-    {
-        $default = $skus->first(function (GoodsSku $sku) {
-            return $sku->sku_code === GoodsSku::DEFAULT_SKU_CODE;
-        });
-
-        if ($default) {
-            return;
-        }
-
-        $first = $skus->first();
-        if (!$first) {
-            return;
-        }
-
-        $first->sku_code = GoodsSku::DEFAULT_SKU_CODE;
-        $first->save();
     }
 
     private function fillMissingFromGoods(GoodsSku $sku, Goods $goods): void

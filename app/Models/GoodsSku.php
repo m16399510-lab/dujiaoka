@@ -22,7 +22,13 @@ class GoodsSku extends BaseModel
                 $sku->sku_name = '默认规格';
             }
 
+            $sku->sku_code = trim((string) $sku->sku_code);
+
             if (empty($sku->sku_code)) {
+                $sku->sku_code = self::makeUniqueCode($sku->goods_id);
+            }
+
+            if (self::codeExistsForAnotherSku($sku)) {
                 $sku->sku_code = self::makeUniqueCode($sku->goods_id);
             }
 
@@ -73,11 +79,26 @@ class GoodsSku extends BaseModel
         for ($i = 0; $i < 10; $i++) {
             $code = 'SKU-' . strtoupper(Str::random(8));
 
-            if (!$goodsID || !self::query()->where('goods_id', $goodsID)->where('sku_code', $code)->exists()) {
+            if (!$goodsID || !self::withTrashed()->where('goods_id', $goodsID)->where('sku_code', $code)->exists()) {
                 return $code;
             }
         }
 
         return 'SKU-' . strtoupper(Str::random(12));
+    }
+
+    private static function codeExistsForAnotherSku(GoodsSku $sku): bool
+    {
+        if (!$sku->goods_id || !$sku->sku_code) {
+            return false;
+        }
+
+        return self::withTrashed()
+            ->where('goods_id', $sku->goods_id)
+            ->where('sku_code', $sku->sku_code)
+            ->when($sku->id, function ($query) use ($sku) {
+                $query->where('id', '<>', $sku->id);
+            })
+            ->exists();
     }
 }

@@ -16,6 +16,7 @@ use Dcat\Admin\Show;
 use Dcat\Admin\Http\Controllers\AdminController;
 use App\Models\Goods as GoodsModel;
 use App\Service\GoodsSkuService;
+use Illuminate\Support\Facades\Log;
 
 class GoodsController extends AdminController
 {
@@ -206,7 +207,14 @@ class GoodsController extends AdminController
 
                 $goods = GoodsModel::query()->find($goodsID);
                 if ($goods) {
-                    app(GoodsSkuService::class)->syncAfterGoodsSaved($goods);
+                    try {
+                        app(GoodsSkuService::class)->syncAfterGoodsSaved($goods);
+                    } catch (\Throwable $exception) {
+                        Log::error('Sync goods SKU after save failed', [
+                            'goods_id' => $goodsID,
+                            'message' => $exception->getMessage(),
+                        ]);
+                    }
                 }
             });
         });
