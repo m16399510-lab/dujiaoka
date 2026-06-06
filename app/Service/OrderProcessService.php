@@ -447,7 +447,7 @@ class OrderProcessService
             // 回调事件
             ApiHook::dispatch($order);
             return $completedOrder;
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
             DB::rollBack();
             throw new RuleValidationException($exception->getMessage());
         }
@@ -488,11 +488,13 @@ class OrderProcessService
             'ord_price' => $order->actual_price,
             'created_at' => $order->created_at,
         ];
-        $tpl = $this->emailtplService->detailByToken('manual_send_manage_mail');
-        $mailBody = replace_mail_tpl($tpl, $mailData);
         $manageMail = dujiaoka_config_get('manage_email', '');
+        $tpl = $this->emailtplService->detailByToken('manual_send_manage_mail');
+        $mailBody = $tpl ? replace_mail_tpl($tpl, $mailData) : false;
         // 邮件发送
-        MailSend::dispatch($manageMail, $mailBody['tpl_name'], $mailBody['tpl_content']);
+        if ($manageMail && $mailBody) {
+            MailSend::dispatch($manageMail, $mailBody['tpl_name'], $mailBody['tpl_content']);
+        }
         return $order;
     }
 
@@ -537,9 +539,11 @@ class OrderProcessService
             'ord_price' => $order->actual_price,
         ];
         $tpl = $this->emailtplService->detailByToken('card_send_user_email');
-        $mailBody = replace_mail_tpl($tpl, $mailData);
+        $mailBody = $tpl ? replace_mail_tpl($tpl, $mailData) : false;
         // 邮件发送
-        MailSend::dispatch($order->email, $mailBody['tpl_name'], $mailBody['tpl_content']);
+        if ($mailBody) {
+            MailSend::dispatch($order->email, $mailBody['tpl_name'], $mailBody['tpl_content']);
+        }
         return $order;
     }
 

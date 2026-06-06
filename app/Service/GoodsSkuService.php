@@ -13,6 +13,11 @@ class GoodsSkuService
 {
     public function ensureDefaultSku(Goods $goods): GoodsSku
     {
+        $realSku = $this->firstRealSku($goods);
+        if ($realSku) {
+            return $realSku;
+        }
+
         $sku = GoodsSku::query()
             ->withTrashed()
             ->where('goods_id', $goods->id)
@@ -128,6 +133,10 @@ class GoodsSkuService
             ->orderBy('goods_id')
             ->orderBy('ord', 'DESC')
             ->get()
+            ->groupBy('goods_id')
+            ->flatMap(function ($skus) {
+                return $this->visibleSkus($skus);
+            })
             ->mapWithKeys(function (GoodsSku $sku) {
                 return [$sku->id => $sku->display_name];
             })
@@ -210,14 +219,22 @@ class GoodsSkuService
         $hasCards = Carmis::query()->where('sku_id', $defaultSku->id)->exists();
         $hasOrders = Order::query()->where('sku_id', $defaultSku->id)->exists();
 
-        if (
-            !$hasCards
-            && !$hasOrders
-            && (float) $defaultSku->actual_price <= 0
-            && (int) $defaultSku->in_stock <= 0
-        ) {
-            $defaultSku->is_open = BaseModel::STATUS_CLOSE;
-            $defaultSku->save();
+        if (!$hasCards && !$hasOrders) {
+            $defaultSku->delete();
+            return;
         }
+
+        $defaultSku->is_open = BaseModel::STATUS_CLOSE;
+        $defaultSku->save();
+    }
+
+    private function firstRealSku(Goods $goods): ?GoodsSku
+    {
+        return GoodsSku::query()
+            ->where('goods_id', $goods->id)
+            ->where('sku_code', '<>', GoodsSku::DEFAULT_SKU_CODE)
+            ->orderBy('ord', 'DESC')
+            ->orderBy('id')
+            ->first();
     }
 }

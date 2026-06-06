@@ -39,6 +39,37 @@
         var imageTarget = document.getElementById('skuPicture');
         var amountInput = document.querySelector('[data-buy-amount]');
         var submitButton = document.querySelector('[data-submit-order]');
+
+        function preloadImage(src) {
+            if (!src) return;
+            var img = new Image();
+            img.decoding = 'async';
+            img.src = src;
+        }
+
+        function swapSkuImage(src) {
+            if (!imageTarget || !src || imageTarget.getAttribute('src') === src) return;
+
+            imageTarget.classList.add('is-loading');
+            var nextImage = new Image();
+            nextImage.decoding = 'async';
+            nextImage.onload = function () {
+                imageTarget.src = src;
+                window.requestAnimationFrame(function () {
+                    imageTarget.classList.remove('is-loading');
+                });
+            };
+            nextImage.onerror = function () {
+                imageTarget.src = src;
+                imageTarget.classList.remove('is-loading');
+            };
+            nextImage.src = src;
+        }
+
+        skuButtons.forEach(function (button) {
+            preloadImage(button.getAttribute('data-sku-picture'));
+        });
+
         skuButtons.forEach(function (button) {
             button.addEventListener('click', function () {
                 skuButtons.forEach(function (item) { item.classList.remove('active'); });
@@ -47,7 +78,7 @@
                 if (priceTarget) priceTarget.textContent = Number(button.getAttribute('data-sku-price') || 0).toFixed(2);
                 var stockValue = Number(button.getAttribute('data-sku-stock') || 0);
                 if (stockTarget) stockTarget.textContent = String(stockValue);
-                if (imageTarget && button.getAttribute('data-sku-picture')) imageTarget.src = button.getAttribute('data-sku-picture');
+                swapSkuImage(button.getAttribute('data-sku-picture'));
                 if (amountInput) {
                     amountInput.max = stockValue > 0 ? String(stockValue) : '';
                     if (stockValue > 0 && Number(amountInput.value || 1) > stockValue) {

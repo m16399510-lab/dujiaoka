@@ -10,6 +10,7 @@
 
 use App\Exceptions\AppException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 if (! function_exists('replace_mail_tpl')) {
@@ -42,6 +43,39 @@ if (! function_exists('replace_mail_tpl')) {
 }
 
 
+if (! function_exists('dujiaoka_config_all')) {
+
+    function dujiaoka_config_all(): array
+    {
+        $sysConfig = Cache::get('system-setting');
+        if (is_array($sysConfig)) {
+            return $sysConfig;
+        }
+
+        try {
+            $table = config('admin.database.settings_table', 'admin_settings');
+            $row = DB::table($table)->where('slug', 'system-setting')->first();
+            if (! $row || empty($row->value)) {
+                return [];
+            }
+
+            $settings = json_decode($row->value, true);
+            if (! is_array($settings)) {
+                $settings = @unserialize($row->value);
+            }
+
+            if (is_array($settings)) {
+                Cache::put('system-setting', $settings);
+                return $settings;
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return [];
+    }
+}
+
 if (! function_exists('dujiaoka_config_get')) {
 
     /**
@@ -57,7 +91,7 @@ if (! function_exists('dujiaoka_config_get')) {
      */
     function dujiaoka_config_get(string $key, $default = null)
     {
-       $sysConfig = Cache::get('system-setting');
+       $sysConfig = dujiaoka_config_all();
        return $sysConfig[$key] ?? $default;
     }
 }

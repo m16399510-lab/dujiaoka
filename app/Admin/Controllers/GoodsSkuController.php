@@ -11,13 +11,26 @@ use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
 use Dcat\Admin\Show;
+use Illuminate\Support\Facades\DB;
 
 class GoodsSkuController extends AdminController
 {
     protected function grid()
     {
         return Grid::make(new GoodsSku(['goods']), function (Grid $grid) {
-            $grid->model()->orderBy('goods_id')->orderBy('ord', 'DESC');
+            $grid->model()
+                ->where(function ($query) {
+                    $query->where('sku_code', '<>', GoodsSkuModel::DEFAULT_SKU_CODE)
+                        ->orWhereNotExists(function ($subQuery) {
+                            $subQuery->select(DB::raw(1))
+                                ->from('goods_skus as real_skus')
+                                ->whereColumn('real_skus.goods_id', 'goods_skus.goods_id')
+                                ->where('real_skus.sku_code', '<>', GoodsSkuModel::DEFAULT_SKU_CODE)
+                                ->whereNull('real_skus.deleted_at');
+                        });
+                })
+                ->orderBy('goods_id')
+                ->orderBy('ord', 'DESC');
             $grid->column('id')->sortable();
             $grid->column('goods.gd_name', '所属商品');
             $grid->column('sku_name', '规格名称');

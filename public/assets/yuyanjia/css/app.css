@@ -146,7 +146,8 @@ input:focus, select:focus, textarea:focus { border-color: rgba(31, 199, 212, .65
 .buy-layout { display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr); gap: 28px; align-items: start; }
 .product-preview, .buy-panel, .panel, .description-panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .product-preview { position: sticky; top: 96px; overflow: hidden; }
-.product-preview img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #0b0f14; }
+.product-preview img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #0b0f14; transition: opacity .16s ease; }
+.product-preview img.is-loading { opacity: .48; }
 .preview-tags { display: flex; gap: 8px; flex-wrap: wrap; padding: 16px; }
 .buy-panel, .panel, .description-panel { padding: clamp(20px, 3vw, 34px); }
 .back-link { color: var(--muted); font-weight: 700; }

@@ -5,9 +5,12 @@ namespace App\Admin\Forms;
 use App\Models\BaseModel;
 use Dcat\Admin\Widgets\Form;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class SystemSetting extends Form
 {
+    private const CACHE_KEY = 'system-setting';
+
     /**
      * Handle the form request.
      *
@@ -17,7 +20,8 @@ class SystemSetting extends Form
      */
     public function handle(array $input)
     {
-        Cache::put('system-setting', $input);
+        $this->saveSettings($input);
+
         return $this
 				->response()
 				->success(admin_trans('system-setting.rule_messages.save_system_setting_success'));
@@ -96,7 +100,60 @@ class SystemSetting extends Form
 
     public function default()
     {
-        return Cache::get('system-setting');
+        return $this->loadSettings();
     }
 
+    private function saveSettings(array $input): void
+    {
+        Cache::put(self::CACHE_KEY, $input);
+
+        try {
+            $table = config('admin.database.settings_table', 'admin_settings');
+            $payload = [
+                'value' => json_encode($input, JSON_UNESCAPED_UNICODE),
+                'updated_at' => now(),
+            ];
+
+            if (DB::table($table)->where('slug', self::CACHE_KEY)->exists()) {
+                DB::table($table)->where('slug', self::CACHE_KEY)->update($payload);
+                return;
+            }
+
+            $payload['slug'] = self::CACHE_KEY;
+            $payload['created_at'] = now();
+            DB::table($table)->insert($payload);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    private function loadSettings(): array
+    {
+        $cached = Cache::get(self::CACHE_KEY);
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        try {
+            $table = config('admin.database.settings_table', 'admin_settings');
+            $row = DB::table($table)->where('slug', self::CACHE_KEY)->first();
+            if (! $row || empty($row->value)) {
+                return [];
+            }
+
+            $settings = json_decode($row->value, true);
+            if (! is_array($settings)) {
+                $settings = @unserialize($row->value);
+            }
+
+            if (is_array($settings)) {
+                Cache::put(self::CACHE_KEY, $settings);
+                return $settings;
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return [];
+    }
 }
