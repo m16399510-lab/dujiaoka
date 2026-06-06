@@ -164,6 +164,11 @@ def old_pay_map(mysql_conn) -> Tuple[Dict[str, int], Dict[str, int]]:
     return by_check, by_name
 
 
+def ensure_target_schema(cur) -> None:
+    cur.execute("ALTER TABLE `orders` MODIFY `info` MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL")
+    cur.execute("ALTER TABLE `carmis` MODIFY `carmi` MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL")
+
+
 def guess_pay_id(payment: Optional[Dict[str, Any]], maps: Tuple[Dict[str, int], Dict[str, int]]) -> Tuple[Optional[int], str]:
     if not payment:
         return None, "no payment row"
@@ -338,6 +343,7 @@ def main() -> int:
 
     try:
         with mysql_conn.cursor() as cur:
+            ensure_target_schema(cur)
             if args.truncate_target:
                 for table in ["orders", "carmis", "goods_skus", "goods", "goods_group"]:
                     cur.execute(f"DELETE FROM `{table}`")
