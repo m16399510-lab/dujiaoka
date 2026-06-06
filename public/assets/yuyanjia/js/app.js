@@ -37,6 +37,8 @@
             var today = new Date().toISOString().slice(0, 10);
             var todayKey = 'yuyanjia_notice_today_' + today;
             var foreverKey = 'yuyanjia_notice_forever';
+            var noticeTriggers = document.querySelectorAll('[data-open-notice]');
+            var lastNoticeTrigger = null;
             var canStore = true;
 
             try {
@@ -55,20 +57,39 @@
                 window.localStorage.setItem(key, '1');
             }
 
-            function openNotice() {
+            function openNotice(trigger) {
+                lastNoticeTrigger = trigger || document.activeElement;
                 noticeModal.classList.add('is-open');
                 noticeModal.setAttribute('aria-hidden', 'false');
                 document.body.style.overflow = 'hidden';
             }
 
+            function restoreNoticeFocus() {
+                var active = document.activeElement;
+                if (active && noticeModal.contains(active)) {
+                    active.blur();
+                }
+
+                var fallback = lastNoticeTrigger && document.contains(lastNoticeTrigger)
+                    ? lastNoticeTrigger
+                    : noticeTriggers[0];
+
+                if (fallback && typeof fallback.focus === 'function') {
+                    fallback.focus({ preventScroll: true });
+                }
+            }
+
             function closeNotice() {
+                restoreNoticeFocus();
                 noticeModal.classList.remove('is-open');
                 noticeModal.setAttribute('aria-hidden', 'true');
                 document.body.style.overflow = '';
             }
 
-            document.querySelectorAll('[data-open-notice]').forEach(function (button) {
-                button.addEventListener('click', openNotice);
+            noticeTriggers.forEach(function (button) {
+                button.addEventListener('click', function () {
+                    openNotice(button);
+                });
             });
 
             document.querySelectorAll('[data-close-notice]').forEach(function (button) {
