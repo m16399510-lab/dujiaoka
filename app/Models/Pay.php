@@ -12,6 +12,18 @@ class Pay extends BaseModel
 
     protected $table = 'pays';
 
+    protected $fillable = [
+        'pay_name',
+        'pay_check',
+        'pay_method',
+        'pay_client',
+        'merchant_id',
+        'merchant_key',
+        'merchant_pem',
+        'pay_handleroute',
+        'is_open',
+    ];
+
     /**
      * 跳转
      */
