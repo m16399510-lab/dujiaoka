@@ -519,38 +519,6 @@ CREATE TABLE `pays` (
 -- Records of pays
 -- ----------------------------
 BEGIN;
-INSERT INTO `pays` VALUES (1, '鏀粯瀹濆綋闈粯', 'zfbf2f', 2, 3, '鍟嗘埛鍙?, '鏀粯瀹濆叕閽?, '鍟嗘埛绉侀挜', '/pay/alipay', 1, '2019-03-11 05:04:52', '2021-06-08 16:28:06', NULL);
-INSERT INTO `pays` VALUES (2, '鏀粯瀹?PC', 'aliweb', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/alipay', 1, '2019-07-08 13:25:27', '2019-07-12 09:47:53', NULL);
-INSERT INTO `pays` VALUES (3, '鐮佹敮浠?QQ', 'mqq', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/mapay', 1, '2019-07-11 09:05:27', '2019-07-11 12:13:11', NULL);
-INSERT INTO `pays` VALUES (4, '鐮佹敮浠樻敮浠樺疂', 'mzfb', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/mapay', 1, '2019-07-11 09:06:02', '2019-07-11 12:12:58', NULL);
-INSERT INTO `pays` VALUES (5, '鐮佹敮浠樺井淇?, 'mwx', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/mapay', 1, '2019-07-11 09:06:23', '2019-07-11 12:13:05', NULL);
-INSERT INTO `pays` VALUES (6, 'Paysapi 鏀粯瀹?, 'pszfb', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/paysapi', 1, '2019-07-11 09:31:12', '2019-07-11 09:31:12', NULL);
-INSERT INTO `pays` VALUES (7, 'Paysapi 寰俊', 'pswx', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/paysapi', 1, '2019-07-11 09:31:43', '2019-07-11 09:31:43', NULL);
-INSERT INTO `pays` VALUES (8, '寰俊鎵爜', 'wescan', 2, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/wepay', 1, '2019-07-12 07:50:20', '2019-07-12 08:08:26', NULL);
-INSERT INTO `pays` VALUES (11, 'Payjs 寰俊鎵爜', 'payjswescan', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/payjs', 1, '2019-07-25 07:28:42', '2019-08-20 12:17:58', NULL);
-INSERT INTO `pays` VALUES (14, '鏄撴敮浠?鏀粯瀹?, 'alipay', 1, 1, '鍟嗘埛鍙?, '', '瀵嗛挜', '/pay/yipay', 2, '2020-01-10 15:22:56', '2020-01-11 06:33:07', NULL);
-INSERT INTO `pays` VALUES (15, '鏄撴敮浠?寰俊', 'wxpay', 1, 1, '鍟嗘埛鍙?, NULL, '瀵嗛挜', '/pay/yipay', 1, '2020-07-14 16:27:06', NULL, NULL);
-INSERT INTO `pays` VALUES (16, '鏄撴敮浠?QQ 閽卞寘', 'qqpay', 1, 1, '鍟嗘埛鍙?, NULL, '瀵嗛挜', '/pay/yipay', 1, '2020-07-14 16:27:03', NULL, NULL);
-INSERT INTO `pays` VALUES (17, 'PayPal', 'paypal', 1, 1, '鍟嗘埛鍙?, NULL, '瀵嗛挜', '/pay/paypal', 1, '2020-07-14 16:25:20', NULL, NULL);
-INSERT INTO `pays` VALUES (19, 'V 鍏嶇鏀粯瀹?, 'vzfb', 1, 1, 'V 鍏嶇閫氳瀵嗛挜', NULL, 'V 鍏嶇鍦板潃 渚嬪 https://vpay.qq.com/    缁撳熬蹇呴』鏈?', 'pay/vpay', 1, '2020-05-01 13:15:56', '2020-05-01 13:18:29', NULL);
-INSERT INTO `pays` VALUES (20, 'V 鍏嶇寰俊', 'vwx', 1, 1, 'V 鍏嶇閫氳瀵嗛挜', NULL, 'V 鍏嶇鍦板潃 渚嬪 https://vpay.qq.com/    缁撳熬蹇呴』鏈?', 'pay/vpay', 1, '2020-05-01 13:17:28', '2020-05-01 13:18:38', NULL);
-INSERT INTO `pays` VALUES (21, 'Stripe[寰俊鏀粯瀹漖', 'stripe', 1, 1, 'pk寮€澶寸殑鍙彂甯冨瘑閽?, NULL, 'sk寮€澶寸殑瀵嗛挜', 'pay/stripe', 1, '2020-10-29 13:15:56', '2020-10-29 13:18:29', NULL);
-INSERT INTO `pays` VALUES (22, 'Coinbase[鍔犲瘑璐у竵]', 'coinbase', 1, 3, '璐圭巼', 'API瀵嗛挜', '鍏变韩瀵嗛挜', 'pay/coinbase', 0, '2021-08-15 13:15:56', '2021-10-12 13:15:56', NULL);
-INSERT INTO `pays` VALUES (23, 'Epusdt[trc20]', 'epusdt', 1, 3, 'API瀵嗛挜', '涓嶅～鍗冲彲', 'api璇锋眰鍦板潃', 'pay/epusdt', 0, '2022-03-22 13:15:56', '2022-03-22 13:15:56', NULL);
-
-INSERT INTO `pays` VALUES (24,'TRX', 'tokenpay-trx', 1, 3, 'TRX', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (25,'USDT-TRC20', 'tokenpay-usdt-trc', 1, 3, 'USDT_TRC20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (26,'ETH', 'tokenpay-eth', 1, 3, 'EVM_ETH_ETH', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (27,'USDT-ERC20', 'tokenpay-usdt-eth', 1, 3, 'EVM_ETH_USDT_ERC20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (28,'USDC-ERC20', 'tokenpay-usdc-eth', 1, 3, 'EVM_ETH_USDC_ERC20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (29,'BNB', 'tokenpay-bnb', 1, 3, 'EVM_BSC_BNB', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (30,'USDT-BSC', 'tokenpay-usdt-bsc', 1, 3, 'EVM_BSC_USDT_BEP20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (31,'USDC-BSC', 'tokenpay-usdc-bsc', 1, 3, 'EVM_BSC_USDC_BEP20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (32,'MATIC', 'tokenpay-matic', 1, 3, 'EVM_Polygon_MATIC', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (33,'USDT-Polygon', 'tokenpay-usdt-polygon', 1, 3, 'EVM_Polygon_USDT_ERC20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-INSERT INTO `pays` VALUES (34,'USDC-Polygon', 'tokenpay-usdc-polygon', 1, 3, 'EVM_Polygon_USDC_ERC20', '浣犵殑API瀵嗛挜', 'https://token-pay.xxx.com', 'pay/tokenpay', 1, now(), now(), NULL);
-
--- ----------------------------
 COMMIT;
 
 SET FOREIGN_KEY_CHECKS = 1;
