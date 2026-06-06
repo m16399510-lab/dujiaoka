@@ -31,4 +31,50 @@ class GoodsGroup extends BaseModel
         return $this->hasMany(Goods::class, 'group_id');
     }
 
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    public function getDisplayNameAttribute()
+    {
+        return $this->parent ? $this->parent->gp_name . ' / ' . $this->gp_name : $this->gp_name;
+    }
+
+    public static function treeOptions($excludeId = null)
+    {
+        $groups = self::query()
+            ->orderBy('parent_id')
+            ->orderBy('ord', 'DESC')
+            ->orderBy('id')
+            ->get()
+            ->keyBy('id');
+
+        $options = [];
+        foreach ($groups as $group) {
+            if ($excludeId && (int) $group->id === (int) $excludeId) {
+                continue;
+            }
+
+            $names = [$group->gp_name];
+            $parentId = (int) $group->parent_id;
+            $seen = [$group->id => true];
+
+            while ($parentId && isset($groups[$parentId]) && !isset($seen[$parentId])) {
+                $seen[$parentId] = true;
+                array_unshift($names, $groups[$parentId]->gp_name);
+                $parentId = (int) $groups[$parentId]->parent_id;
+            }
+
+            $options[$group->id] = implode(' / ', $names);
+        }
+
+        return $options;
+    }
+
 }

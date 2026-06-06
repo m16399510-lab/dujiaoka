@@ -21,9 +21,12 @@ class GoodsGroupController extends AdminController
      */
     protected function grid()
     {
-        return Grid::make(new GoodsGroup(), function (Grid $grid) {
+        return Grid::make(new GoodsGroup(['parent']), function (Grid $grid) {
             $grid->model()->orderBy('id', 'DESC');
             $grid->column('id')->sortable();
+            $grid->column('parent.gp_name', '上级分类')->display(function ($value) {
+                return $value ?: '顶级分类';
+            });
             $grid->column('gp_name')->editable();
             $grid->column('is_open')->switch();
             $grid->column('ord')->editable();
@@ -58,6 +61,9 @@ class GoodsGroupController extends AdminController
     {
         return Show::make($id, new GoodsGroup(), function (Show $show) {
             $show->field('id');
+            $show->field('parent.gp_name', '上级分类')->as(function ($value) {
+                return $value ?: '顶级分类';
+            });
             $show->field('gp_name');
             $show->field('is_open')->as(function ($isOpen) {
                 if ($isOpen == GoodsGroupModel::STATUS_OPEN) {
@@ -81,12 +87,20 @@ class GoodsGroupController extends AdminController
     {
         return Form::make(new GoodsGroup(), function (Form $form) {
             $form->display('id');
+            $form->select('parent_id', '上级分类')
+                ->options([0 => '顶级分类'] + GoodsGroupModel::treeOptions())
+                ->default(0);
             $form->text('gp_name');
             $form->switch('is_open')->default(GoodsGroupModel::STATUS_OPEN);
             $form->number('ord')->default(1)->help(admin_trans('dujiaoka.ord'));
             $form->display('created_at');
             $form->display('updated_at');
             $form->disableViewButton();
+            $form->saving(function (Form $form) {
+                if ((int) $form->parent_id === (int) $form->model()->id) {
+                    $form->parent_id = 0;
+                }
+            });
             $form->footer(function ($footer) {
                 // 去掉`查看`checkbox
                 $footer->disableViewCheck();

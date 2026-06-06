@@ -34,7 +34,9 @@ class GoodsController extends AdminController
             $grid->column('gd_name');
             $grid->column('gd_description');
             $grid->column('gd_keywords');
-            $grid->column('group.gp_name', admin_trans('goods.fields.group_id'));
+            $grid->column('group.gp_name', admin_trans('goods.fields.group_id'))->display(function ($value) {
+                return $this->group ? $this->group->display_name : $value;
+            });
             $grid->column('type')
                 ->using(GoodsModel::getGoodsTypeMap())
                 ->label([
@@ -62,7 +64,7 @@ class GoodsController extends AdminController
                 $filter->equal('id');
                 $filter->like('gd_name');
                 $filter->equal('type')->select(GoodsModel::getGoodsTypeMap());
-                $filter->equal('group_id')->select(GoodsGroupModel::query()->pluck('gp_name', 'id'));
+                $filter->equal('group_id')->select(GoodsGroupModel::treeOptions());
                 $filter->scope(admin_trans('dujiaoka.trashed'))->onlyTrashed();
                 $filter->equal('coupon.coupons_id', admin_trans('goods.fields.coupon_id'))->select(
                     Coupon::query()->pluck('coupon', 'id')
@@ -140,7 +142,7 @@ class GoodsController extends AdminController
             $form->text('gd_description')->required();
             $form->text('gd_keywords')->required();
             $form->select('group_id')->options(
-                GoodsGroupModel::query()->pluck('gp_name', 'id')
+                GoodsGroupModel::treeOptions()
             )->required();
             $form->image('picture')->autoUpload()->uniqueName()->help(admin_trans('goods.helps.picture'));
             $form->radio('type')->options(GoodsModel::getGoodsTypeMap())->default(GoodsModel::AUTOMATIC_DELIVERY)->required();

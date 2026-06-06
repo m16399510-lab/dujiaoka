@@ -15,6 +15,7 @@ Example:
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
 import decimal
 import json
@@ -48,6 +49,7 @@ OLD_CARMI_UNSOLD = 1
 OLD_CARMI_SOLD = 2
 
 DATETIME_TEXT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}")
+LOCALE_KEYS = ("zh-CN", "zh_CN", "zh", "zh-TW", "zh_TW", "en-US", "en_US", "en")
 
 
 def now() -> str:
@@ -77,6 +79,108 @@ def pick(row: Dict[str, Any], *names: str, default: Any = None) -> Any:
     return default
 
 
+def parse_jsonish(value: Any) -> Any:
+    value = scalar(value)
+    if value in (None, ""):
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        if text[0] in "[{":
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return text
+        return text
+    return value
+
+
+def first_text(value: Any) -> str:
+    data = parse_jsonish(value)
+    if data is None:
+        return ""
+    if isinstance(data, dict):
+        for key in LOCALE_KEYS:
+            text = first_text(data.get(key))
+            if text:
+                return text
+        for item in data.values():
+            text = first_text(item)
+            if text:
+                return text
+        return ""
+    if isinstance(data, list):
+        texts = [first_text(item) for item in data]
+        return " / ".join(text for text in texts if text)
+    return str(data).strip()
+
+
+def localized(row: Dict[str, Any], *names: str, default: str = "") -> str:
+    for name in names:
+        if name in row and row[name] not in (None, ""):
+            text = first_text(row[name])
+            if text:
+                return text
+    return default
+
+
+def json_list(value: Any) -> List[Any]:
+    data = parse_jsonish(value)
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return list(data.values())
+    if data not in (None, ""):
+        return [data]
+    return []
+
+
+def first_image(row: Dict[str, Any], *names: str) -> str:
+    for name in names:
+        if name not in row or row[name] in (None, ""):
+            continue
+        for item in json_list(row[name]):
+            if isinstance(item, dict):
+                item = item.get("url") or item.get("src") or item.get("path") or item.get("image")
+            text = first_text(item)
+            if text:
+                return text
+    return ""
+
+
+def tags_text(row: Dict[str, Any]) -> str:
+    tags = [first_text(item) for item in json_list(pick(row, "tags", default=None))]
+    return ", ".join(tag for tag in tags if tag)
+
+
+def sku_display_name(row: Dict[str, Any], fallback_code: str) -> str:
+    name = localized(row, "name_json", "title_json", "name", "sku_name", "title", default="")
+    if name:
+        return name
+    spec = parse_jsonish(pick(row, "spec_values_json", "spec_values", "sku_snapshot_json", "sku_snapshot", default=None))
+    if isinstance(spec, dict):
+        values = []
+        for value in spec.values():
+            text = first_text(value)
+            if text:
+                values.append(text)
+        if values:
+            return " / ".join(values)
+    if isinstance(spec, list):
+        values = [first_text(item) for item in spec]
+        values = [value for value in values if value]
+        if values:
+            return " / ".join(values)
+    if fallback_code and fallback_code.upper() != "DEFAULT":
+        return fallback_code
+    return "默认规格"
+
+
 def trim(value: Any, length: int, default: str = "") -> str:
     text = str(value if value is not None else default)
     return text[:length]
@@ -85,7 +189,10 @@ def trim(value: Any, length: int, default: str = "") -> str:
 def money(value: Any, default: float = 0.0) -> float:
     if value in (None, ""):
         return default
-    return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def int_or_zero(value: Any) -> int:
@@ -128,6 +235,93 @@ def map_carmi_status(row: Dict[str, Any]) -> int:
     return OLD_CARMI_UNSOLD
 
 
+def card_is_unused(row: Dict[str, Any]) -> bool:
+    return map_carmi_status(row) == OLD_CARMI_UNSOLD
+
+
+def safe_filename(value: str, default: str = "untitled") -> str:
+    text = re.sub(r'[\\/:*?"<>|\r\n]+', "_", value).strip(" ._")
+    return trim(text or default, 120)
+
+
+def category_path(category_id: int, categories_by_id: Dict[int, Dict[str, Any]]) -> List[str]:
+    if category_id not in categories_by_id:
+        return ["未分类"]
+    names: List[str] = []
+    seen = set()
+    current_id = category_id
+    for _ in range(12):
+        if not current_id or current_id in seen:
+            break
+        seen.add(current_id)
+        category = categories_by_id.get(current_id)
+        if not category:
+            break
+        names.append(localized(category, "name_json", "name", "title_json", "title", default=f"分类 {current_id}"))
+        current_id = int_or_zero(pick(category, "parent_id", default=0))
+    names.reverse()
+    return [name for name in names if name] or ["未分类"]
+
+
+def export_unused_cards(source: Dict[str, List[Dict[str, Any]]], target_dir: str) -> Dict[str, Any]:
+    categories_by_id = {int_or_zero(pick(row, "id")): row for row in source["categories"]}
+    products_by_id = {int_or_zero(pick(row, "id")): row for row in source["products"]}
+    skus_by_id = {int_or_zero(pick(row, "id")): row for row in source["product_skus"]}
+
+    grouped: Dict[Tuple[str, str, str, int, int], List[str]] = defaultdict(list)
+    for card in source["card_secrets"]:
+        if not card_is_unused(card):
+            continue
+        content = pick(card, "secret", "card", "carmi", "content", "value", default="")
+        if not content:
+            continue
+        product_id = int_or_zero(pick(card, "product_id", "goods_id"))
+        sku_id = int_or_zero(pick(card, "sku_id", "product_sku_id", default=0))
+        product = products_by_id.get(product_id, {})
+        sku = skus_by_id.get(sku_id, {})
+        title = localized(product, "title_json", "title", "name_json", "name", default=f"商品 {product_id}")
+        category_id = int_or_zero(pick(product, "category_id", "group_id", default=0))
+        category = " / ".join(category_path(category_id, categories_by_id))
+        sku_name = sku_display_name(sku, pick(sku, "sku_code", default="DEFAULT")) if sku else "默认规格"
+        grouped[(category, title, sku_name, product_id, sku_id)].append(str(content))
+
+    os.makedirs(target_dir, exist_ok=True)
+    summary = []
+    for (category, title, sku_name, product_id, sku_id), lines in sorted(grouped.items()):
+        category_dir = os.path.join(target_dir, *[safe_filename(part) for part in category.split(" / ")])
+        os.makedirs(category_dir, exist_ok=True)
+        filename = f"{product_id}-{safe_filename(title)}"
+        if sku_name and sku_name != "默认规格":
+            filename += f"-{safe_filename(sku_name)}"
+        path = os.path.join(category_dir, f"{filename}.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("\n".join(lines))
+            fh.write("\n")
+        summary.append(
+            {
+                "category": category,
+                "product_id": product_id,
+                "product": title,
+                "sku_id": sku_id,
+                "sku": sku_name,
+                "count": len(lines),
+                "file": path,
+            }
+        )
+
+    csv_path = os.path.join(target_dir, "_summary.csv")
+    with open(csv_path, "w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=["category", "product_id", "product", "sku_id", "sku", "count", "file"])
+        writer.writeheader()
+        writer.writerows(summary)
+
+    json_path = os.path.join(target_dir, "_summary.json")
+    with open(json_path, "w", encoding="utf-8") as fh:
+        json.dump(summary, fh, ensure_ascii=False, indent=2)
+
+    return {"groups": len(summary), "cards": sum(row["count"] for row in summary), "dir": target_dir}
+
+
 def table_exists_pg(conn, table: str) -> bool:
     with conn.cursor() as cur:
         cur.execute(
@@ -164,9 +358,23 @@ def old_pay_map(mysql_conn) -> Tuple[Dict[str, int], Dict[str, int]]:
     return by_check, by_name
 
 
+def mysql_column_exists(cur, table: str, column: str) -> bool:
+    cur.execute(f"SHOW COLUMNS FROM `{table}` LIKE %s", (column,))
+    return cur.fetchone() is not None
+
+
+def mysql_index_exists(cur, table: str, index: str) -> bool:
+    cur.execute(f"SHOW INDEX FROM `{table}` WHERE Key_name=%s", (index,))
+    return cur.fetchone() is not None
+
+
 def ensure_target_schema(cur) -> None:
     cur.execute("ALTER TABLE `orders` MODIFY `info` MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL")
     cur.execute("ALTER TABLE `carmis` MODIFY `carmi` MEDIUMTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL")
+    if not mysql_column_exists(cur, "goods_group", "parent_id"):
+        cur.execute("ALTER TABLE `goods_group` ADD `parent_id` int NOT NULL DEFAULT 0 AFTER `id`")
+    if not mysql_index_exists(cur, "goods_group", "idx_parent_id"):
+        cur.execute("ALTER TABLE `goods_group` ADD INDEX `idx_parent_id` (`parent_id`)")
 
 
 def guess_pay_id(payment: Optional[Dict[str, Any]], maps: Tuple[Dict[str, int], Dict[str, int]]) -> Tuple[Optional[int], str]:
@@ -233,11 +441,13 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Only print report. This is the default.")
     parser.add_argument("--apply", action="store_true", help="Write converted data into MySQL.")
     parser.add_argument("--truncate-target", action="store_true", help="Delete target goods/orders/carmis data before import.")
+    parser.add_argument("--skip-unsold-cards", action="store_true", help="Do not import unused card inventory into old dujiaoka.")
+    parser.add_argument("--export-unused-cards-dir", help="Export unused card secrets grouped by category/product/SKU.")
     args = parser.parse_args()
 
     pg = None
     if args.source_json:
-        with open(args.source_json, "r", encoding="utf-8") as fh:
+        with open(args.source_json, "r", encoding="utf-8-sig") as fh:
             source = json.load(fh)
     else:
         if not args.pg_dsn:
@@ -273,6 +483,10 @@ def main() -> int:
     ]:
         source.setdefault(name, [])
 
+    unused_cards_report = None
+    if args.export_unused_cards_dir:
+        unused_cards_report = export_unused_cards(source, args.export_unused_cards_dir)
+
     if args.export_json:
         with open(args.export_json, "w", encoding="utf-8") as fh:
             json.dump(source, fh, ensure_ascii=False, indent=2, default=str)
@@ -283,6 +497,15 @@ def main() -> int:
         "source_counts": {name: len(rows) for name, rows in source.items()},
         "generated_at": now(),
     }
+    if unused_cards_report:
+        report["unused_cards_export"] = unused_cards_report
+    parent_ids = {int_or_zero(pick(order, "parent_id", default=0)) for order in source["orders"]}
+    parent_ids.discard(0)
+    if parent_ids:
+        report["order_parent_child_mode"] = {
+            "parent_orders": len(parent_ids),
+            "target_sale_orders": len(source["orders"]) - len(parent_ids),
+        }
 
     status_counts: Dict[str, int] = defaultdict(int)
     for order in source["orders"]:
@@ -335,7 +558,22 @@ def main() -> int:
     payments_by_order = group_by(source["payments"], "order_id")
     fulfillments_by_order = group_by(source["fulfillments"], "order_id")
     fulfillments_by_item = group_by(source["fulfillments"], "order_item_id")
+    cards_by_order = group_by(source["card_secrets"], "order_id")
     skus_by_product = group_by(source["product_skus"], "product_id", "goods_id")
+    products_by_id = {int_or_zero(pick(product, "id")): product for product in source["products"]}
+    orders_by_id = {int_or_zero(pick(order, "id")): order for order in source["orders"]}
+    children_by_parent = group_by(
+        [order for order in source["orders"] if int_or_zero(pick(order, "parent_id", default=0))],
+        "parent_id",
+    )
+    sale_orders = [
+        order
+        for order in source["orders"]
+        if not children_by_parent.get(int_or_zero(pick(order, "id")))
+    ]
+    source_order_count = len(source["orders"])
+    if source_order_count != len(sale_orders):
+        print(f"Parent/child orders detected: importing {len(sale_orders)} sale orders from {source_order_count} source orders.")
 
     sku_id_map: Dict[Tuple[str, int], int] = {}
     pay_maps = old_pay_map(mysql_conn)
@@ -355,9 +593,10 @@ def main() -> int:
                     "goods_group",
                     {
                         "id": category_id,
-                        "gp_name": trim(pick(category, "name", "title", default=f"分类 {category_id}"), 200),
-                        "is_open": enabled(pick(category, "is_enabled", "enabled", "status", default=1)),
-                        "ord": int_or_zero(pick(category, "sort", "ord", "priority", default=1)),
+                        "parent_id": int_or_zero(pick(category, "parent_id", default=0)),
+                        "gp_name": trim(localized(category, "name_json", "name", "title_json", "title", default=f"分类 {category_id}"), 200),
+                        "is_open": enabled(pick(category, "is_active", "is_enabled", "enabled", "status", default=1)),
+                        "ord": int_or_zero(pick(category, "sort_order", "sort", "ord", "priority", default=1)),
                         "created_at": pick(category, "created_at", default=now()),
                         "updated_at": pick(category, "updated_at", default=now()),
                         "deleted_at": None,
@@ -370,6 +609,7 @@ def main() -> int:
                     "goods_group",
                     {
                         "id": 1,
+                        "parent_id": 0,
                         "gp_name": "默认分类",
                         "is_open": 1,
                         "ord": 1,
@@ -382,32 +622,39 @@ def main() -> int:
             for product in source["products"]:
                 product_id = int_or_zero(pick(product, "id"))
                 product_skus = skus_by_product.get(product_id, [])
-                sku_prices = [money(pick(sku, "price", "actual_price", "sale_price", default=None)) for sku in product_skus]
+                sku_prices = [money(pick(sku, "price_amount", "price", "actual_price", "sale_price", default=None)) for sku in product_skus]
                 sku_prices = [price for price in sku_prices if price > 0]
-                product_price = money(pick(product, "price", "actual_price", "sale_price", default=None), sku_prices[0] if sku_prices else 0.0)
+                product_price = money(
+                    pick(product, "price_amount", "price", "actual_price", "sale_price", default=None),
+                    min(sku_prices) if sku_prices else 0.0,
+                )
+                product_image = first_image(product, "images", "image", "picture", "cover")
+                product_title = localized(product, "title_json", "title", "name_json", "name", default=f"商品 {product_id}")
+                product_description = localized(product, "description_json", "description", "subtitle", "short_description", default="")
+                product_content = localized(product, "content_json", "content", "description_json", "description", default=product_description)
                 upsert(
                     cur,
                     "goods",
                     {
                         "id": product_id,
                         "group_id": int_or_zero(pick(product, "category_id", "group_id", default=1)) or 1,
-                        "gd_name": trim(pick(product, "name", "title", default=f"商品 {product_id}"), 200),
-                        "gd_description": trim(pick(product, "subtitle", "short_description", "description", default=""), 200),
-                        "gd_keywords": trim(pick(product, "keywords", default=""), 200),
-                        "picture": pick(product, "image", "picture", "cover", default=""),
+                        "gd_name": trim(product_title, 200),
+                        "gd_description": trim(product_description, 200),
+                        "gd_keywords": trim(tags_text(product) or pick(product, "keywords", default=""), 200),
+                        "picture": product_image,
                         "retail_price": money(pick(product, "retail_price", "original_price", default=0)),
                         "actual_price": product_price,
-                        "in_stock": int_or_zero(pick(product, "stock", "in_stock", default=0)),
+                        "in_stock": int_or_zero(pick(product, "manual_stock_total", "stock", "in_stock", default=0)),
                         "sales_volume": int_or_zero(pick(product, "sales_volume", "sold_count", default=0)),
-                        "ord": int_or_zero(pick(product, "sort", "ord", "priority", default=1)),
-                        "buy_limit_num": int_or_zero(pick(product, "buy_limit", "buy_limit_num", default=0)),
-                        "buy_prompt": pick(product, "buy_prompt", "purchase_notice", default=""),
-                        "description": pick(product, "description", "content", default=""),
+                        "ord": int_or_zero(pick(product, "sort_order", "sort", "ord", "priority", default=1)),
+                        "buy_limit_num": int_or_zero(pick(product, "max_purchase_quantity", "buy_limit", "buy_limit_num", default=0)),
+                        "buy_prompt": localized(product, "instructions_json", "buy_prompt", "purchase_notice", default=""),
+                        "description": product_content,
                         "type": OLD_AUTO_DELIVERY,
                         "wholesale_price_cnf": None,
                         "other_ipu_cnf": None,
                         "api_hook": None,
-                        "is_open": enabled(pick(product, "is_enabled", "enabled", "status", default=1)),
+                        "is_open": enabled(pick(product, "is_active", "is_enabled", "enabled", "status", default=1)),
                         "created_at": pick(product, "created_at", default=now()),
                         "updated_at": pick(product, "updated_at", default=now()),
                         "deleted_at": None,
@@ -419,8 +666,8 @@ def main() -> int:
                     "sku_name": "默认规格",
                     "sku_code": "DEFAULT",
                     "actual_price": product_price,
-                    "picture": pick(product, "image", "picture", "cover", default=""),
-                    "in_stock": int_or_zero(pick(product, "stock", "in_stock", default=0)),
+                    "picture": product_image,
+                    "in_stock": int_or_zero(pick(product, "manual_stock_total", "stock", "in_stock", default=0)),
                     "ord": 1,
                     "is_open": 1,
                     "created_at": pick(product, "created_at", default=now()),
@@ -447,24 +694,27 @@ def main() -> int:
                     if sku_code.upper() == "DEFAULT":
                         sku_id_map[("sku", source_sku_id)] = sku_id_map[("default", product_id)]
                         continue
+                    sku_image = first_image(sku, "images", "image", "picture", "cover") or product_image
                     row = {
-                        "id": source_sku_id,
                         "goods_id": product_id,
-                        "sku_name": trim(pick(sku, "name", "sku_name", "title", default=f"规格 {source_sku_id}"), 150),
+                        "sku_name": trim(sku_display_name(sku, sku_code), 150),
                         "sku_code": sku_code,
-                        "actual_price": money(pick(sku, "price", "actual_price", "sale_price", default=product_price)),
-                        "picture": pick(sku, "image", "picture", default=pick(product, "image", "picture", "cover", default="")),
-                        "in_stock": int_or_zero(pick(sku, "stock", "in_stock", default=0)),
-                        "ord": int_or_zero(pick(sku, "sort", "ord", "priority", default=1)),
-                        "is_open": enabled(pick(sku, "is_enabled", "enabled", "status", default=1)),
+                        "actual_price": money(pick(sku, "price_amount", "price", "actual_price", "sale_price", default=product_price)),
+                        "picture": sku_image,
+                        "in_stock": int_or_zero(pick(sku, "manual_stock_total", "stock", "in_stock", default=0)),
+                        "ord": int_or_zero(pick(sku, "sort_order", "sort", "ord", "priority", default=1)),
+                        "is_open": enabled(pick(sku, "is_active", "is_enabled", "enabled", "status", default=1)),
                         "created_at": pick(sku, "created_at", default=now()),
                         "updated_at": pick(sku, "updated_at", default=now()),
                         "deleted_at": None,
                     }
                     upsert(cur, "goods_skus", row)
-                    sku_id_map[("sku", source_sku_id)] = source_sku_id
+                    cur.execute("SELECT id FROM goods_skus WHERE goods_id=%s AND sku_code=%s", (product_id, sku_code))
+                    sku_id_map[("sku", source_sku_id)] = int(cur.fetchone()["id"])
 
             for card in source["card_secrets"]:
+                if args.skip_unsold_cards and card_is_unused(card):
+                    continue
                 product_id = int_or_zero(pick(card, "product_id", "goods_id"))
                 source_sku_id = int_or_zero(pick(card, "product_sku_id", "sku_id"))
                 sku_id = sku_id_map.get(("sku", source_sku_id)) or sku_id_map.get(("default", product_id))
@@ -485,27 +735,64 @@ def main() -> int:
                     },
                 )
 
-            for order in source["orders"]:
+            for order in sale_orders:
                 order_id = int_or_zero(pick(order, "id"))
-                item = (order_items_by_order.get(order_id) or [{}])[0]
+                parent_id = int_or_zero(pick(order, "parent_id", default=0))
+                parent = orders_by_id.get(parent_id, {}) if parent_id else {}
+                item_rows = order_items_by_order.get(order_id) or order_items_by_order.get(parent_id) or [{}]
+                item = item_rows[0]
                 product_id = int_or_zero(pick(item, "product_id", "goods_id", default=pick(order, "product_id", "goods_id", default=0)))
                 source_sku_id = int_or_zero(pick(item, "product_sku_id", "sku_id"))
                 sku_id = sku_id_map.get(("sku", source_sku_id)) or sku_id_map.get(("default", product_id))
-                payment = latest(payments_by_order.get(order_id, []))
+                payment = latest(payments_by_order.get(order_id, []) or payments_by_order.get(parent_id, []))
                 pay_id, pay_note = guess_pay_id(payment, pay_maps)
                 if payment and not pay_id:
                     unmatched_payments.append({"order_id": order_id, "note": pay_note, "payment": payment})
-                fulfillment_rows = fulfillments_by_order.get(order_id, []) + fulfillments_by_item.get(pick(item, "id", default=None), [])
+                fulfillment_rows = (
+                    fulfillments_by_order.get(order_id, [])
+                    + fulfillments_by_order.get(parent_id, [])
+                    + fulfillments_by_item.get(pick(item, "id", default=None), [])
+                )
                 info_lines = []
+                seen_fulfillment_ids = set()
                 for fulfillment in fulfillment_rows:
-                    value = pick(fulfillment, "content", "secret", "card_secret", "delivered_content", "payload", default="")
+                    fulfillment_id = pick(fulfillment, "id", default=None)
+                    if fulfillment_id in seen_fulfillment_ids:
+                        continue
+                    seen_fulfillment_ids.add(fulfillment_id)
+                    value = pick(fulfillment, "payload", "content", "secret", "card_secret", "delivered_content", default="")
+                    if not value:
+                        value = first_text(pick(fulfillment, "logistics_json", "delivery_data", default=""))
                     if value:
                         info_lines.append(str(value))
-                paid = payment and str(pick(payment, "status", default="")).lower() in {"paid", "success", "succeeded", "completed"}
-                order_sn = trim(pick(order, "order_no", "order_sn", "no", default=f"NEXT{order_id}"), 150)
+                seen_info = set(info_lines)
+                for sold_card in cards_by_order.get(order_id, []) + cards_by_order.get(parent_id, []):
+                    if card_is_unused(sold_card):
+                        continue
+                    value = pick(sold_card, "secret", "card", "carmi", "content", "value", default="")
+                    if value and str(value) not in seen_info:
+                        info_lines.append(str(value))
+                        seen_info.add(str(value))
+                paid = bool(payment and str(pick(payment, "status", default="")).lower() in {"paid", "success", "succeeded", "completed"})
+                paid = paid or bool(pick(order, "paid_at", default=pick(parent, "paid_at", default=None)))
+                siblings = children_by_parent.get(parent_id, []) if parent_id else []
+                order_no_source = parent if parent and len(siblings) == 1 else order
+                order_sn = trim(pick(order_no_source, "order_no", "order_sn", "no", default=f"NEXT{order_id}"), 150)
                 quantity = int_or_zero(pick(item, "quantity", "buy_amount", default=1)) or 1
-                goods_price = money(pick(item, "unit_price", "price", "actual_price", default=pick(order, "total_amount", "total_price", default=0)))
-                actual = money(pick(payment or {}, "amount", "fee_amount", default=pick(order, "paid_amount", "total_amount", "total_price", default=goods_price * quantity)))
+                goods_price = money(pick(item, "unit_price", "unit_price_amount", "price", "actual_price", default=pick(order, "total_amount", "total_price", default=0)))
+                item_total = money(pick(item, "total_price", "total_amount", default=goods_price * quantity), goods_price * quantity)
+                actual = money(
+                    pick(
+                        payment or {},
+                        "amount",
+                        "fee_amount",
+                        default=pick(order, "online_paid_amount", "paid_amount", "total_amount", "total_price", default=pick(parent, "online_paid_amount", "total_amount", default=item_total)),
+                    )
+                )
+                product = products_by_id.get(product_id, {})
+                title = localized(item, "title_json", "title", "product_name", default="")
+                if not title:
+                    title = localized(product, "title_json", "title", "name_json", "name", default=order_sn)
                 upsert(
                     cur,
                     "orders",
@@ -515,21 +802,21 @@ def main() -> int:
                         "goods_id": product_id,
                         "sku_id": sku_id,
                         "coupon_id": 0,
-                        "title": trim(pick(item, "product_name", "title", default=pick(order, "title", default=order_sn)), 200),
+                        "title": trim(title, 200),
                         "type": OLD_AUTO_DELIVERY,
                         "goods_price": goods_price,
                         "buy_amount": quantity,
                         "coupon_discount_price": 0,
                         "wholesale_discount_price": 0,
-                        "total_price": goods_price * quantity,
+                        "total_price": item_total,
                         "actual_price": actual,
-                        "search_pwd": "",
-                        "email": trim(pick(order, "guest_email", "email", "user_email", default=""), 200),
+                        "search_pwd": trim(pick(order, "guest_password", default=pick(parent, "guest_password", default="")), 200),
+                        "email": trim(pick(order, "guest_email", "email", "user_email", default=pick(parent, "guest_email", "email", "user_email", default="")), 200),
                         "info": "\n".join(info_lines),
                         "pay_id": pay_id,
-                        "buy_ip": trim(pick(order, "client_ip", "buy_ip", "ip", default="127.0.0.1"), 50),
+                        "buy_ip": trim(pick(order, "client_ip", "buy_ip", "ip", default=pick(parent, "client_ip", "buy_ip", "ip", default="127.0.0.1")), 50),
                         "trade_no": trim(pick(payment or {}, "trade_no", "gateway_order_no", "provider_ref", default=""), 200),
-                        "status": map_order_status(pick(order, "status", default=None), bool(paid)),
+                        "status": map_order_status(pick(order, "status", default=pick(parent, "status", default=None)), bool(paid)),
                         "coupon_ret_back": 0,
                         "created_at": pick(order, "created_at", default=now()),
                         "updated_at": pick(order, "updated_at", default=now()),

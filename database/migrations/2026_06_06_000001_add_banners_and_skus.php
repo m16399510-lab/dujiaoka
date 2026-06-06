@@ -9,6 +9,12 @@ class AddBannersAndSkus extends Migration
 {
     public function up()
     {
+        if (Schema::hasTable('goods_group') && !Schema::hasColumn('goods_group', 'parent_id')) {
+            Schema::table('goods_group', function (Blueprint $table) {
+                $table->integer('parent_id')->default(0)->after('id')->index('idx_parent_id');
+            });
+        }
+
         if (!Schema::hasTable('banners')) {
             Schema::create('banners', function (Blueprint $table) {
                 $table->increments('id');
@@ -41,22 +47,31 @@ class AddBannersAndSkus extends Migration
             });
         }
 
-        if (!Schema::hasColumn('orders', 'sku_id')) {
+        if (Schema::hasTable('orders') && !Schema::hasColumn('orders', 'sku_id')) {
             Schema::table('orders', function (Blueprint $table) {
                 $table->integer('sku_id')->nullable()->after('goods_id')->index();
             });
         }
 
-        if (!Schema::hasColumn('carmis', 'sku_id')) {
+        if (Schema::hasTable('carmis') && !Schema::hasColumn('carmis', 'sku_id')) {
             Schema::table('carmis', function (Blueprint $table) {
                 $table->integer('sku_id')->nullable()->after('goods_id')->index();
             });
         }
 
         $now = date('Y-m-d H:i:s');
-        DB::statement("INSERT INTO goods_skus (goods_id, sku_name, sku_code, actual_price, picture, in_stock, ord, is_open, created_at, updated_at) SELECT g.id, '默认规格', 'DEFAULT', g.actual_price, g.picture, g.in_stock, 1, 1, '{$now}', '{$now}' FROM goods g LEFT JOIN goods_skus s ON s.goods_id = g.id AND s.sku_code = 'DEFAULT' WHERE s.id IS NULL");
-        DB::statement("UPDATE orders o JOIN goods_skus s ON s.goods_id = o.goods_id AND s.sku_code = 'DEFAULT' SET o.sku_id = s.id WHERE o.sku_id IS NULL");
-        DB::statement("UPDATE carmis c JOIN goods_skus s ON s.goods_id = c.goods_id AND s.sku_code = 'DEFAULT' SET c.sku_id = s.id WHERE c.sku_id IS NULL");
+
+        if (Schema::hasTable('goods')) {
+            DB::statement("INSERT INTO goods_skus (goods_id, sku_name, sku_code, actual_price, picture, in_stock, ord, is_open, created_at, updated_at) SELECT g.id, '默认规格', 'DEFAULT', g.actual_price, g.picture, g.in_stock, 1, 1, '{$now}', '{$now}' FROM goods g LEFT JOIN goods_skus s ON s.goods_id = g.id AND s.sku_code = 'DEFAULT' WHERE s.id IS NULL");
+        }
+
+        if (Schema::hasTable('orders') && Schema::hasColumn('orders', 'sku_id')) {
+            DB::statement("UPDATE orders o JOIN goods_skus s ON s.goods_id = o.goods_id AND s.sku_code = 'DEFAULT' SET o.sku_id = s.id WHERE o.sku_id IS NULL");
+        }
+
+        if (Schema::hasTable('carmis') && Schema::hasColumn('carmis', 'sku_id')) {
+            DB::statement("UPDATE carmis c JOIN goods_skus s ON s.goods_id = c.goods_id AND s.sku_code = 'DEFAULT' SET c.sku_id = s.id WHERE c.sku_id IS NULL");
+        }
 
         $this->insertMenu('/banner', 'Banner', 26, 19, 23, 'fa-image');
         $this->insertMenu('/goods-sku', 'Goods_SKU', 27, 11, 12, 'fa-tags');
@@ -66,13 +81,13 @@ class AddBannersAndSkus extends Migration
     {
         DB::table('admin_menu')->whereIn('uri', ['/banner', '/goods-sku'])->delete();
 
-        if (Schema::hasColumn('orders', 'sku_id')) {
+        if (Schema::hasTable('orders') && Schema::hasColumn('orders', 'sku_id')) {
             Schema::table('orders', function (Blueprint $table) {
                 $table->dropColumn('sku_id');
             });
         }
 
-        if (Schema::hasColumn('carmis', 'sku_id')) {
+        if (Schema::hasTable('carmis') && Schema::hasColumn('carmis', 'sku_id')) {
             Schema::table('carmis', function (Blueprint $table) {
                 $table->dropColumn('sku_id');
             });
@@ -80,6 +95,12 @@ class AddBannersAndSkus extends Migration
 
         Schema::dropIfExists('goods_skus');
         Schema::dropIfExists('banners');
+
+        if (Schema::hasTable('goods_group') && Schema::hasColumn('goods_group', 'parent_id')) {
+            Schema::table('goods_group', function (Blueprint $table) {
+                $table->dropColumn('parent_id');
+            });
+        }
     }
 
     private function insertMenu(string $uri, string $title, int $id, int $parentId, int $order, string $icon): void

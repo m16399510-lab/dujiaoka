@@ -49,10 +49,16 @@ class GoodsService
                 $query->withCount(['carmis' => function($query) {
                     $query->where('status', Carmis::STATUS_UNSOLD);
                 }])->where('is_open', Goods::STATUS_OPEN)->orderBy('ord', 'DESC');
-            }])
+            }, 'parent'])
             ->where('is_open', GoodsGroup::STATUS_OPEN)
             ->orderBy('ord', 'DESC')
             ->get();
+        $goods = $goods->filter(function ($group) {
+            return $group->goods && $group->goods->count() > 0;
+        })->values();
+        $goods->each(function ($group) {
+            $group->gp_name = $group->display_name;
+        });
         // 将自动
         return $goods ? $goods->toArray() : null;
     }
