@@ -15,7 +15,7 @@
         $bannerButton = $banner ? trim((string) data_get($banner, 'button_text', '')) : '';
         $bannerLink = $banner ? trim((string) data_get($banner, 'link', '')) : '';
         $bannerStyle = $bannerImage !== ''
-            ? "background-image: linear-gradient(90deg, rgba(5,8,15,.94) 0%, rgba(5,8,15,.74) 45%, rgba(5,8,15,.20) 100%), url('" . picture_ulr($bannerImage) . "')"
+            ? "background-image: url('" . picture_ulr($bannerImage) . "')"
             : '';
     @endphp
 
