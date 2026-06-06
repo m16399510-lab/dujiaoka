@@ -19,6 +19,7 @@ import datetime as dt
 import decimal
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -46,6 +47,8 @@ OLD_AUTO_DELIVERY = 1
 OLD_CARMI_UNSOLD = 1
 OLD_CARMI_SOLD = 2
 
+DATETIME_TEXT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}")
+
 
 def now() -> str:
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -58,6 +61,12 @@ def scalar(value: Any, default: Any = None) -> Any:
         return float(value)
     if isinstance(value, (dt.datetime, dt.date)):
         return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, str) and DATETIME_TEXT_RE.match(value):
+        text = value.replace("T", " ")
+        text = text.rstrip("Z")
+        text = re.sub(r"\.\d+", "", text)
+        text = re.sub(r"([+-]\d{2}:?\d{2})$", "", text)
+        return text[:19]
     return value
 
 
