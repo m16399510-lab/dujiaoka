@@ -34,12 +34,17 @@ class VpayController extends PayController
             );
             switch ($payway) {
                 case 'vzfb':
+                case 'vpay-zfb':
+                case 'zfb':
                     $parameter['type'] = 2;
                     break;
                 case 'vwx':
-                default:
+                case 'vpay-wx':
+                case 'wx':
                     $parameter['type'] = 1;
                     break;
+                default:
+                    throw new RuleValidationException('V免签支付标识不正确，请检查支付配置');
             }
             $parameter['sign'] = md5($parameter['payId'] . $parameter['param'] . $parameter['type'] . $parameter['price'] . $this->payGateway->merchant_id);
             $payurl = $this->payGateway->merchant_pem . 'createOrder?' . http_build_query($parameter); //支付页面
