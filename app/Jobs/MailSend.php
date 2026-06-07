@@ -57,7 +57,7 @@ class MailSend implements ShouldQueue
     {
         $body = $this->content;
         $title = $this->title;
-        $sysConfig = cache('system-setting');
+        $sysConfig = \function_exists('dujiaoka_config_all') ? \dujiaoka_config_all() : (cache('system-setting') ?: []);
         $mailConfig = [
             'driver' => $sysConfig['driver'] ?? 'smtp',
             'host' => $sysConfig['host'] ?? '',
@@ -68,7 +68,7 @@ class MailSend implements ShouldQueue
                 'name'      =>  $sysConfig['from_name'] ?? '独角发卡'
             ],
             'password' => $sysConfig['password'] ?? '',
-            'encryption' => $sysConfig['encryption'] ?? ''
+            'encryption' => $sysConfig['encryption'] ?? 'ssl'
         ];
         $to = $this->to;
         //  覆盖 mail 配置

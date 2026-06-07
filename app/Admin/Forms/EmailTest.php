@@ -29,7 +29,7 @@ class EmailTest extends Form
       $to = $input['to'];
       $title = $input['title'];
       $body = $input['body'];
-      $sysConfig = cache('system-setting');
+      $sysConfig = \function_exists('dujiaoka_config_all') ? \dujiaoka_config_all() : (cache('system-setting') ?: []);
       $mailConfig = [
           'driver' => $sysConfig['driver'] ?? 'smtp',
           'host' => $sysConfig['host'] ?? '',
