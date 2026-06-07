@@ -113,6 +113,29 @@
                             }
                             $cardImageUrl = picture_ulr($cardImage);
                             $buyUrl = url("/buy/{$goods['id']}");
+                            $cartSkus = $skus->map(function ($sku) use ($goods, $isAuto, $buyUrl) {
+                                $skuPicture = trim((string)($sku['picture'] ?: $goods['picture']));
+                                $skuStock = $isAuto ? (int)($sku['carmis_count'] ?? 0) : (int)($sku['in_stock'] ?? 0);
+
+                                return [
+                                    'id' => (string)($sku['id'] ?? ''),
+                                    'name' => (string)($sku['sku_name'] ?? '默认规格'),
+                                    'price' => number_format((float)($sku['actual_price'] ?? 0), 2, '.', ''),
+                                    'stock' => $skuStock,
+                                    'image' => picture_ulr($skuPicture),
+                                    'url' => $buyUrl,
+                                ];
+                            })->values()->all();
+                            if (empty($cartSkus)) {
+                                $cartSkus = [[
+                                    'id' => '',
+                                    'name' => '默认规格',
+                                    'price' => number_format((float)$price, 2, '.', ''),
+                                    'stock' => $stock,
+                                    'image' => $cardImageUrl,
+                                    'url' => $buyUrl,
+                                ]];
+                            }
                         @endphp
                         <article class="product-card" data-group="group-{{ $group['id'] }}" data-product-name="{{ $goods['gd_name'] }}">
                             <a href="{{ $buyUrl }}" class="product-image">
@@ -148,6 +171,8 @@
                                             data-cart-stock="{{ $stock }}"
                                             data-cart-image="{{ $cardImageUrl }}"
                                             data-cart-url="{{ $buyUrl }}"
+                                            data-cart-buy-limit="{{ (int)($goods['buy_limit_num'] ?? 0) }}"
+                                            data-cart-skus="{{ json_encode($cartSkus, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}"
                                         >🛒</button>
                                         <a class="icon-btn" href="{{ $buyUrl }}" aria-label="购买 {{ $goods['gd_name'] }}">→</a>
                                     </div>
@@ -161,4 +186,35 @@
             </div>
         </div>
     </section>
+
+    <div class="sku-picker" data-sku-picker aria-hidden="true">
+        <div class="sku-picker-backdrop" data-sku-picker-close></div>
+        <section class="sku-picker-dialog" role="dialog" aria-modal="true" aria-label="选择商品规格">
+            <header class="sku-picker-head">
+                <div>
+                    <span class="eyebrow muted">SKU</span>
+                    <h2 data-sku-picker-name>选择规格</h2>
+                </div>
+                <button type="button" class="notice-close" data-sku-picker-close aria-label="关闭规格选择">×</button>
+            </header>
+            <div class="sku-picker-body">
+                <img data-sku-picker-image src="" alt="">
+                <div class="sku-picker-main">
+                    <div class="sku-picker-options" data-sku-picker-options></div>
+                    <label class="sku-picker-qty">
+                        <span>购买数量</span>
+                        <input type="number" min="1" value="1" data-sku-picker-qty>
+                    </label>
+                </div>
+            </div>
+            <footer class="sku-picker-foot">
+                <div>
+                    <span>当前单价</span>
+                    <strong><span data-sku-picker-price>0.00</span> CNY</strong>
+                    <em>库存 <span data-sku-picker-stock>0</span></em>
+                </div>
+                <button type="button" class="btn primary" data-sku-picker-submit>加入购物车</button>
+            </footer>
+        </section>
+    </div>
 @stop

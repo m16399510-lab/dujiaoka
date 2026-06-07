@@ -61,6 +61,7 @@
                                     class="sku-option {{ $index === 0 ? 'active' : '' }}"
                                     data-sku-option
                                     data-sku-id="{{ $sku['id'] }}"
+                                    data-sku-name="{{ $sku['sku_name'] }}"
                                     data-sku-price="{{ $sku['actual_price'] }}"
                                     data-sku-stock="{{ $skuStock }}"
                                     data-sku-picture="{{ picture_ulr($skuPicture) }}"
@@ -143,7 +144,19 @@
                             <span>当前单价</span>
                             <strong><span data-sku-price-label>{{ number_format((float)$firstSku['actual_price'], 2) }}</span> CNY</strong>
                         </div>
-                        <button class="btn primary" type="submit" data-submit-order>立即下单</button>
+                        <div class="buy-actions">
+                            <button
+                                class="btn secondary"
+                                type="button"
+                                data-detail-cart-add
+                                data-cart-id="{{ $id }}"
+                                data-cart-name="{{ $gd_name }}"
+                                data-cart-category=""
+                                data-cart-url="{{ url("/buy/{$id}") }}"
+                                data-cart-buy-limit="{{ (int)$buy_limit_num }}"
+                            >加入购物车</button>
+                            <button class="btn primary" type="submit" data-submit-order>立即下单</button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -169,5 +182,7 @@
 @section('js')
     <script>
         window.YUYANJIA_BUY_LIMIT = {{ (int)$buy_limit_num }};
+        window.YUYANJIA_PRESELECT_SKU = @json((string) request()->query('sku_id', ''));
+        window.YUYANJIA_PRESELECT_QTY = {{ max(1, (int) request()->query('qty', 1)) }};
     </script>
 @stop
