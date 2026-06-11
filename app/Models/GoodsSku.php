@@ -85,6 +85,23 @@ class GoodsSku extends BaseModel
         return $goodsName . ' - ' . $this->sku_name;
     }
 
+    public function getRealStockAttribute(): int
+    {
+        $goods = $this->relationLoaded('goods') ? $this->goods : $this->goods()->first();
+
+        if ($goods && (int) $goods->type === Goods::AUTOMATIC_DELIVERY) {
+            if (array_key_exists('available_carmis_count', $this->attributes)) {
+                return max(0, (int) $this->attributes['available_carmis_count']);
+            }
+
+            return (int) $this->carmis()
+                ->where('status', Carmis::STATUS_UNSOLD)
+                ->count();
+        }
+
+        return max(0, (int) $this->in_stock);
+    }
+
     private static function makeUniqueCode($goodsID): string
     {
         for ($i = 0; $i < 10; $i++) {
